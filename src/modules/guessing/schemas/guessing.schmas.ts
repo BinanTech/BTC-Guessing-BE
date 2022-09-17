@@ -21,10 +21,11 @@ const guessing = new Schema({
 /**
  * Serialize user to send it throw the JWT token
  */
- guessing.methods.serialize = function(user) {
+ guessing.methods.serialize = function(guessing) {
   return {
-    _id: user._id,
-    score: user.username
+    _id: guessing._id,
+    userId: guessing.userId,
+    score: guessing.score || 0
   };
 };
 
