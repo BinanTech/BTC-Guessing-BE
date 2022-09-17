@@ -40,7 +40,6 @@ export class UsersService {
     isSerialized?: boolean
   ): Promise<User | null> {
     let user = await this.UserModel.findOne(options, fields).exec();
-    console.log(options);
     if (user && isSerialized) {
       user = user.schema.methods.serialize(user);
     }

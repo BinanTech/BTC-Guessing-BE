@@ -6,6 +6,7 @@ import { UsersService } from '../users/users.service';
 import { User } from '../users/interfaces/user.interface';
 import { JwtService } from './jwt/jwt.service';
 import { GuessingService } from '../guessing/guessing.service';
+import { getBTCPrice } from '../chat/chat.service';
 
 @Injectable()
 export class AuthService {
@@ -57,8 +58,9 @@ export class AuthService {
 
     const tokens = await this.jwtService.generateToken(serializedUser);
     const guess = await this.guessingService.find(user._id);
+    const price = await getBTCPrice();
 
-    return { tokens, user: serializedUser, guess };
+    return { tokens, user: serializedUser, guess, price };
   }
 
   /**
@@ -71,15 +73,17 @@ export class AuthService {
     const user: User = await this.jwtService.verify(token);
     const tokens = await this.jwtService.generateToken(user);
     const guess = await this.guessingService.find(user._id);
+    const price = await getBTCPrice();
 
-    return { tokens, user, guess };
+    return { tokens, user, guess, price };
   }
 
   async getMe(token: string): Promise<any> {
     const user: User = await this.jwtService.verify(token);
     const tokens = await this.jwtService.generateToken(user);
     const guess = await this.guessingService.find(user._id);
+    const price = await getBTCPrice();
 
-    return { tokens, user, guess };
+    return { tokens, user, guess, price };
   }
 }
