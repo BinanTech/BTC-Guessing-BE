@@ -5,12 +5,14 @@ import * as jwt from 'jsonwebtoken';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/interfaces/user.interface';
 import { JwtService } from './jwt/jwt.service';
+import { GuessingService } from '../guessing/guessing.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
-    private readonly jwtService: JwtService
+    private readonly jwtService: JwtService,
+    private readonly guessingService: GuessingService
   ) {}
 
   /**
@@ -54,8 +56,9 @@ export class AuthService {
       );
 
     const tokens = await this.jwtService.generateToken(serializedUser);
+    const guess = await this.guessingService.find(user._id);
 
-    return { tokens, user: serializedUser };
+    return { tokens, user: serializedUser, guess };
   }
 
   /**
@@ -67,14 +70,16 @@ export class AuthService {
   async refreshToken(token: string): Promise<any> {
     const user: User = await this.jwtService.verify(token);
     const tokens = await this.jwtService.generateToken(user);
+    const guess = await this.guessingService.find(user._id);
 
-    return { tokens, user };
+    return { tokens, user, guess };
   }
 
   async getMe(token: string): Promise<any> {
     const user: User = await this.jwtService.verify(token);
     const tokens = await this.jwtService.generateToken(user);
+    const guess = await this.guessingService.find(user._id);
 
-    return { tokens, user };
+    return { tokens, user, guess };
   }
 }
