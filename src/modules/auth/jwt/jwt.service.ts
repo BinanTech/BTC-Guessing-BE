@@ -25,11 +25,11 @@ export class JwtService {
       },
       iss: os.hostname()
     };
-    const accessToken = await jwt.sign(payload, process.env.jwtSecret, {
-      expiresIn: process.env.accessTokenExpires
+    const accessToken = await jwt.sign(payload, process.env.NEST_JWT_SECRET, {
+      expiresIn: process.env.NEST_ACCESS_TOKEN_EXPIRES
     });
-    const refreshToken = await jwt.sign(payload, process.env.jwtSecret, {
-      expiresIn: process.env.refreshTokenExpires
+    const refreshToken = await jwt.sign(payload, process.env.NEST_JWT_SECRET, {
+      expiresIn: process.env.NEST_REFRESH_TOKEN_EXPIRES
     });
 
     return { accessToken, refreshToken };
@@ -43,7 +43,7 @@ export class JwtService {
    */
   async verify(token: string, isWs: boolean = false): Promise<User | null> {
     try {
-      const payload = <any>jwt.verify(token, process.env.jwtSecret);
+      const payload = <any>jwt.verify(token, process.env.NEST_JWT_SECRET);
       const user = await this.usersService.findById(payload.sub._id);
 
       if (!user) {
