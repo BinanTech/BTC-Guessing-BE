@@ -1,79 +1,133 @@
 import {
-    WebSocketGateway,
-    SubscribeMessage,
-    WsResponse,
-    WebSocketServer,
-    OnGatewayConnection,
-    OnGatewayDisconnect
-  } from '@nestjs/websockets';
-  import { Observable } from 'rxjs';
-  
-  import { JwtService } from '../auth/jwt/jwt.service';
-  import { User } from '../users/interfaces/user.interface';
-  import { UsersService } from '../users/users.service';
-  
-  @WebSocketGateway(1080, { namespace: 'rooms' })
-  export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
-    @WebSocketServer()
-    server;
-  
-    connectedUsers: string[] = [];
-  
-    constructor(
-      private jwtService: JwtService
-    ) {}
-  
-    async handleConnection(socket) {
-      const user: User = await this.jwtService.verify(
-        socket.handshake.query.token,
-        true
-      );
-  
-      this.connectedUsers = [...this.connectedUsers, String(user._id)];
-  
-      // Send list of connected users
-      this.server.emit('users', this.connectedUsers);
-    }
-  
-    async handleDisconnect(socket) {
-      const user: User = await this.jwtService.verify(
-        socket.handshake.query.token,
-        true
-      );
-      const userPos = this.connectedUsers.indexOf(String(user._id));
-  
-      if (userPos > -1) {
-        this.connectedUsers = [
-          ...this.connectedUsers.slice(0, userPos),
-          ...this.connectedUsers.slice(userPos + 1)
-        ];
-      }
-  
-      // Sends the new list of connected users
-      this.server.emit('users', this.connectedUsers);
-    }
-  
-    @SubscribeMessage('message')
-    async onMessage(client, data: any) {
-      const event: string = 'message';
-      const result = data[0];
-  
-      return Observable.create(observer =>
-        observer.next({ event, data: result.message })
-      );
-    }
-  
-    @SubscribeMessage('join')
-    async onRoomJoin(client, data: any): Promise<any> {
-      client.join(data[0]);
-  
-      // Send last messages to the connected user
-      client.emit('message', data[0]);
-    }
-  
-    @SubscribeMessage('leave')
-    onRoomLeave(client, data: any): void {
-      client.leave(data[0]);
+  WebSocketGateway,
+  SubscribeMessage,
+  WsResponse,
+  WebSocketServer,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+} from '@nestjs/websockets';
+import { Observable } from 'rxjs';
+
+import { JwtService } from '../auth/jwt/jwt.service';
+import { GuessingService } from '../guessing/guessing.service';
+import { User } from '../users/interfaces/user.interface';
+import { UsersService } from '../users/users.service';
+import { getBTCPrice } from './chat.service';
+import { CronJob } from 'cron';
+
+const options = {
+  cors: {
+    origin: ['example1.com', 'example2.com'],
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
+  namespace: '',
+};
+
+@WebSocketGateway(1080, options)
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  @WebSocketServer()
+  server;
+
+  connectedSockets: any;
+  btcPrice: number;
+  oldPrice: number;
+
+  gettingPriceJob: CronJob;
+  broadcastPriceJob: CronJob;
+  sendingScoreJob: CronJob;
+
+  constructor(
+    private jwtService: JwtService,
+    private guessServie: GuessingService,
+  ) {
+    this.btcPrice = 0;
+    this.oldPrice = 0;
+    this.connectedSockets = {};
+  }
+
+  async setBTCPrice() {
+    const btcPrice: string = await getBTCPrice();
+
+    if (btcPrice) {
+      this.oldPrice = this.btcPrice;
+      this.btcPrice = parseFloat(btcPrice);
     }
   }
-  
+
+  async sendScore() {
+    if (this.connectedSockets && Object.keys(this.connectedSockets).length) {
+      Object.keys(this.connectedSockets).forEach(async (key) => {
+        console.log(key, 'key');
+        let guess = await this.guessServie.find(key);
+        if (this.connectedSockets[key]?.guessing && guess) {
+          const difference = this.btcPrice - this.oldPrice;
+          let result = false;
+          if (difference > 0) {
+            result = this.connectedSockets[key].guessing === 'up';
+          } else if (difference < 0) {
+            result = this.connectedSockets[key].guessing === 'down';
+          }
+          let score = !guess?.score ? 0 : parseInt(guess.score);
+          if (result) score++;
+          else score--;
+          await this.guessServie.update(
+            guess.userId,
+            score,
+            this.connectedSockets[key].guessing,
+          );
+          console.log(score, 'score');
+          this.connectedSockets[key].guessing = '';
+          guess.score = score.toString();
+        }
+        this.server
+          .to(this.connectedSockets[key].socket.id)
+          .emit('score', JSON.stringify({...guess, oldPrice: this.oldPrice, currentPrice: this.btcPrice}));
+      });
+    }
+  }
+
+  async handleConnection(socket) {
+    if (socket?.handshake?.query?.token !== 'undefined') {
+      const user: User = await this.jwtService.verify(
+        socket.handshake.query.token,
+        true,
+      );
+
+      if (user?._id) {
+        this.connectedSockets[user._id] = { socket, guessing: '' };
+        if (!this.gettingPriceJob) {
+          this.gettingPriceJob = new CronJob(`0 */${process.env.NEST_PER_MINUTES} * * * *`, async () => {
+            await this.setBTCPrice();
+            await this.sendScore();
+          });
+          this.gettingPriceJob.start();
+          console.log('============== started !!! ==================>');
+        }
+      }
+    }
+  }
+
+  async handleDisconnect(socket) {
+    if (socket?.handshake?.query?.token !== 'undefined') {
+      const user: User = await this.jwtService.verify(
+        socket.handshake.query.token,
+        true,
+      );
+
+      if (user?._id) {
+        delete this.connectedSockets[user._id];
+      }
+    }
+  }
+
+  @SubscribeMessage('guess')
+  async onRoomJoin(client, data: any) {
+    const guessingData = JSON.parse(data);
+    console.log(guessingData, 'guessingData');
+    if (guessingData?.userId && this.connectedSockets[guessingData.userId]) {
+      this.connectedSockets[guessingData.userId].guessing = guessingData?.guess;
+    }
+    client.emit('recieved');
+  }
+}
