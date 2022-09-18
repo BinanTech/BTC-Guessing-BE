@@ -12,7 +12,7 @@ import { ChatModule } from './modules/chat/chat.module';
       isGlobal: true,
       envFilePath: `.env`,
     }),
-    MongooseModule.forRoot('mongodb://localhost:27017/nest', {
+    MongooseModule.forRoot(process.env.NEST_MONGOOSE_URL, {
       useUnifiedTopology: true,
       useNewUrlParser: true,
     }),

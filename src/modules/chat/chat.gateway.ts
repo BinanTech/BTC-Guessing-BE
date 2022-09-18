@@ -58,7 +58,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async sendScore() {
     if (this.connectedSockets && Object.keys(this.connectedSockets).length) {
       Object.keys(this.connectedSockets).forEach(async (key) => {
-        console.log(key, 'key');
         let guess = await this.guessServie.find(key);
         if (this.connectedSockets[key]?.guessing && guess) {
           const difference = this.btcPrice - this.oldPrice;
