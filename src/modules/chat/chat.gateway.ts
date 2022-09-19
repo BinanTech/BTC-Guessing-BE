@@ -29,7 +29,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server;
 
-  connectedSockets: any;
+  connectedSockets: any = {};
   btcPrice: number;
   oldPrice: number;
 
@@ -40,11 +40,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private jwtService: JwtService,
     private guessServie: GuessingService,
-  ) {
-    this.btcPrice = 0;
-    this.oldPrice = 0;
-    this.connectedSockets = {};
-  }
+  ) {}
 
   async setBTCPrice() {
     const btcPrice: string = await getBTCPrice();
@@ -75,14 +71,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
             score,
             this.connectedSockets[key].guessing,
           );
-          console.log(score, 'score');
           this.connectedSockets[key].guessing = '';
           guess.score = score.toString();
         }
+        const result = {
+          ...guess,
+          oldPrice: this.oldPrice,
+          currentPrice: this.btcPrice,
+        };
         this.server
-          .to(this.connectedSockets[key].socket.id)
-          .emit('score', JSON.stringify({...guess, oldPrice: this.oldPrice, currentPrice: this.btcPrice}));
+          .to(this.connectedSockets[key].socket)
+          .emit('score', JSON.stringify(result));
       });
+      console.log('===================  sent score !!! ===================>');
     }
   }
 
@@ -94,12 +95,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
 
       if (user?._id) {
-        this.connectedSockets[user._id] = { socket, guessing: '' };
+        this.connectedSockets[user._id] = { socket: socket.id, guessing: '' };
         if (!this.gettingPriceJob) {
-          this.gettingPriceJob = new CronJob(`0 */${process.env.NEST_PER_MINUTES} * * * *`, async () => {
-            await this.setBTCPrice();
-            await this.sendScore();
-          });
+          this.gettingPriceJob = new CronJob(
+            `0 */${process.env.NEST_PER_MINUTES} * * * *`,
+            async () => {
+              await this.setBTCPrice();
+              await this.sendScore();
+            },
+          );
           this.gettingPriceJob.start();
           console.log('============== started !!! ==================>');
         }
@@ -108,22 +112,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   async handleDisconnect(socket) {
-    if (socket?.handshake?.query?.token !== 'undefined') {
-      const user: User = await this.jwtService.verify(
-        socket.handshake.query.token,
-        true,
-      );
-
-      if (user?._id) {
-        delete this.connectedSockets[user._id];
-      }
-    }
+    const key = Object.keys(this.connectedSockets).find(
+      (value: string) => this.connectedSockets[value]?.socket === socket.id,
+    );
+    if (key) delete this.connectedSockets[key];
   }
 
   @SubscribeMessage('guess')
   async onRoomJoin(client, data: any) {
     const guessingData = JSON.parse(data);
-    console.log(guessingData, 'guessingData');
     if (guessingData?.userId && this.connectedSockets[guessingData.userId]) {
       this.connectedSockets[guessingData.userId].guessing = guessingData?.guess;
     }
