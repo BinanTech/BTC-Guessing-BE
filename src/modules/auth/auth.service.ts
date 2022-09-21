@@ -57,7 +57,10 @@ export class AuthService {
       );
 
     const tokens = await this.jwtService.generateToken(serializedUser);
-    const guess = await this.guessingService.find(user._id);
+    let guess = await this.guessingService.find(user._id);
+    if (guess) {
+      guess = await this.guessingService.create(user._id);
+    }
     const price = await getBTCPrice();
 
     return { tokens, user: serializedUser, guess, price };

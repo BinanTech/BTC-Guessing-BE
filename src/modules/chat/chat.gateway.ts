@@ -17,7 +17,7 @@ import { CronJob } from 'cron';
 
 const options = {
   cors: {
-    origin: ['example1.com', 'example2.com'],
+    origin: ['*.*'],
     methods: ['GET', 'POST'],
     credentials: true,
   },
