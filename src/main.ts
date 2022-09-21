@@ -15,7 +15,7 @@ async function bootstrap() {
   app.use(populateUser.populateUserCookie);
 
   app.setGlobalPrefix('api');
-  await app.listen(process.env.PORT || 5000);
-  console.log(`this app is running Port ${process.env.Port ? process.env.Port : 5000}`);
+  await app.listen(process.env.NEST_PORT || 5000);
+  console.log(`this app is running Port ${process.env.NEST_PORT ? process.env.NEST_PORT : 5000}`);
 }
 bootstrap();

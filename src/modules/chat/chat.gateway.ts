@@ -24,7 +24,7 @@ const options = {
   namespace: '',
 };
 
-@WebSocketGateway(1080, options)
+@WebSocketGateway(options)
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server;
