@@ -33,7 +33,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   btcPrice: number;
   oldPrice: number;
 
-  gettingPriceJob: CronJob;
+  gettingPriceJob: CronJob | null;
   broadcastPriceJob: CronJob;
   sendingScoreJob: CronJob;
 
@@ -55,8 +55,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (this.connectedSockets && Object.keys(this.connectedSockets).length) {
       Object.keys(this.connectedSockets).forEach(async (key) => {
         let guess = await this.guessServie.find(key);
-        if (this.connectedSockets[key]?.guessing && guess) {
-          const difference = this.btcPrice - this.oldPrice;
+        const difference = this.btcPrice - this.oldPrice;
+        if (this.connectedSockets[key]?.guessing && guess && difference) {
           let result = false;
           if (difference > 0) {
             result = this.connectedSockets[key].guessing === 'up';
@@ -116,6 +116,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       (value: string) => this.connectedSockets[value]?.socket === socket.id,
     );
     if (key) delete this.connectedSockets[key];
+    if (Object.keys(this.connectedSockets)?.length < 1) {
+      this.gettingPriceJob.stop();
+      this.gettingPriceJob = null;
+      console.log('============== stopped !!! ==================>');
+    }
   }
 
   @SubscribeMessage('guess')
